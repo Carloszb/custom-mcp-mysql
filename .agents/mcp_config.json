@@ -3,6 +3,7 @@
     "custom-sicam-db": {
       "command": "node",
       "args": [
+        "--env-file=.env",
         "index.js"
       ]
     }
