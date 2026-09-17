@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "custom-sicam-db": {
+      "command": "node",
+      "args": [
+        "index.js"
+      ]
+    }
+  }
+}

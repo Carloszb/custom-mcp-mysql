@@ -1,0 +1,15 @@
+{
+  "name": "custom-mcp-mysql",
+  "version": "1.0.0",
+  "description": "Custom MCP Server for read-only MySQL access",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "dotenv": "^17.4.2",
+    "mysql2": "^3.11.0"
+  }
+}
