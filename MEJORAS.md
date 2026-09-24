@@ -14,8 +14,8 @@ Las mejoras se han ordenado de manera progresiva, desde ajustes de lectura bási
 ## Fase 2: Fundamentos de Seguridad y Control
 *Preparar el terreno asegurando que cuando se habiliten las escrituras, no haya riesgos de destruir datos por error.*
 
-- [ ] **Control de permisos por entorno:** Restringir operaciones peligrosas (como DELETE o DROP) en entornos marcados como `producción`, pero permitirlos libremente en `desarrollo`.
-- [ ] **Límites de seguridad (Safeguards):** 
+- [x] **Control de permisos por entorno:** Restringir operaciones peligrosas (como DELETE o DROP) en entornos marcados como `producción`, pero permitirlos libremente en `desarrollo`.
+- [x] **Límites de seguridad (Safeguards):** 
   - Exigir siempre una cláusula `WHERE` en los `UPDATE` y `DELETE`.
   - Limitar el número máximo de filas modificadas por defecto a menos que se fuerce explícitamente.
 - [ ] **Log de cambios (Auditoría):** Registrar cada consulta de mutación que realice el MCP (con timestamp) en un archivo local o una tabla para tener un historial de qué se modificó.
@@ -23,7 +23,7 @@ Las mejoras se han ordenado de manera progresiva, desde ajustes de lectura bási
 ## Fase 3: Mutaciones Básicas (Escritura)
 *Habilitar las operaciones de modificación de datos de forma controlada.*
 
-- [ ] **Nuevas herramientas de escritura (`insert_record`, `update_record`, `delete_record`):** En lugar de inyectar SQL crudo, estas herramientas recibirían parámetros estructurados (tabla, datos, condiciones) para usar _prepared statements_ de MySQL y evitar SQL Injection.
+- [x] **Nuevas herramientas de escritura (`insert_record`, `update_record`, `delete_record`):** En lugar de inyectar SQL crudo, estas herramientas recibirían parámetros estructurados (tabla, datos, condiciones) para usar _prepared statements_ de MySQL y evitar SQL Injection.
 - [ ] **Modo 'Simulación' (Dry-Run / EXPLAIN):** Antes de ejecutar un `UPDATE` o `DELETE` masivo, devolver una estimación de las filas afectadas o el resultado de un `EXPLAIN` para verificar si es lo que se espera.
 
 ## Fase 4: Resiliencia y Operaciones Complejas

@@ -9,10 +9,17 @@ import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
 import path from "path";
 
-// 1. Determinar el entorno de trabajo (development, preprod, prod)
+// 1. Determinar el entorno de trabajo y forzar nombres estrictos
+const allowedEnvs = ['development', 'preprod', 'prod'];
 export const APP_ENV = (process.env.APP_ENV || 'development').toLowerCase();
+
+if (!allowedEnvs.includes(APP_ENV)) {
+  console.error(`[ERROR] APP_ENV='${APP_ENV}' no es válido. Usa: development, preprod o prod`);
+  process.exit(1);
+}
+
 let envPrefix = 'DEV_';
-if (APP_ENV === 'prod' || APP_ENV === 'production') envPrefix = 'PROD_';
+if (APP_ENV === 'prod') envPrefix = 'PROD_';
 if (APP_ENV === 'preprod') envPrefix = 'PREPROD_';
 
 // Función helper para leer variable del entorno específico, o caer en la genérica
@@ -80,6 +87,43 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: { model_name: { type: "string", description: "Nombre del modelo (con o sin la extensión .mwb)" } },
           required: ["model_name"]
         }
+      },
+      {
+        name: "insert_record",
+        description: "Inserta un nuevo registro en una tabla de forma segura.",
+        inputSchema: {
+          type: "object",
+          properties: { 
+            table: { type: "string" },
+            data: { type: "object", description: "Pares columna:valor a insertar" }
+          },
+          required: ["table", "data"]
+        }
+      },
+      {
+        name: "update_record",
+        description: "Actualiza registros existentes en una tabla.",
+        inputSchema: {
+          type: "object",
+          properties: { 
+            table: { type: "string" },
+            data: { type: "object", description: "Pares columna:valor a actualizar" },
+            where: { type: "object", description: "Condiciones obligatorias (ej. { id: 5 })" }
+          },
+          required: ["table", "data", "where"]
+        }
+      },
+      {
+        name: "delete_record",
+        description: "Elimina registros de una tabla.",
+        inputSchema: {
+          type: "object",
+          properties: { 
+            table: { type: "string" },
+            where: { type: "object", description: "Condiciones obligatorias (ej. { id: 5 })" }
+          },
+          required: ["table", "where"]
+        }
       }
     ]
   };
@@ -90,6 +134,54 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   
   try {
+    const checkSecurity = (action, whereClause) => {
+      // 1. Control de permisos por entorno
+      if ((action === 'DELETE' || action === 'DROP') && APP_ENV === 'prod') {
+        throw new Error(`[SEGURIDAD] La operación ${action} está estrictamente bloqueada en el entorno de producción.`);
+      }
+      // 2. Límites de seguridad (Safeguards)
+      if (action === 'UPDATE' || action === 'DELETE') {
+        if (!whereClause || Object.keys(whereClause).length === 0) {
+          throw new Error(`[SEGURIDAD] Es obligatorio proporcionar una condición (WHERE) para la operación ${action}.`);
+        }
+      }
+    };
+
+    if (name === "insert_record") {
+      const { table, data } = args;
+      checkSecurity('INSERT');
+      const [rows] = await pool.query('INSERT INTO ?? SET ?', [table, data]);
+      return { content: [{ type: "text", text: JSON.stringify({ affectedRows: rows.affectedRows, insertId: rows.insertId }, null, 2) }] };
+    }
+
+    if (name === "update_record") {
+      const { table, data, where } = args;
+      checkSecurity('UPDATE', where);
+      const conditions = [];
+      const values = [table, data];
+      for (const [key, val] of Object.entries(where)) {
+        conditions.push(`?? = ?`);
+        values.push(key, val);
+      }
+      const query = `UPDATE ?? SET ? WHERE ${conditions.join(' AND ')} LIMIT 100`;
+      const [rows] = await pool.query(query, values);
+      return { content: [{ type: "text", text: JSON.stringify({ affectedRows: rows.affectedRows }, null, 2) }] };
+    }
+
+    if (name === "delete_record") {
+      const { table, where } = args;
+      checkSecurity('DELETE', where);
+      const conditions = [];
+      const values = [table];
+      for (const [key, val] of Object.entries(where)) {
+        conditions.push(`?? = ?`);
+        values.push(key, val);
+      }
+      const query = `DELETE FROM ?? WHERE ${conditions.join(' AND ')} LIMIT 100`;
+      const [rows] = await pool.query(query, values);
+      return { content: [{ type: "text", text: JSON.stringify({ affectedRows: rows.affectedRows }, null, 2) }] };
+    }
+
     if (name === "list_tables") {
       const [rows] = await pool.query("SHOW TABLES");
       return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
