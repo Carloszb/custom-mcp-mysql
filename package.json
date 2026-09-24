@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
+    "adm-zip": "^0.6.1",
+    "fast-xml-parser": "^5.11.1",
     "mysql2": "^3.11.0"
   }
 }

@@ -4,6 +4,10 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import mysql from "mysql2/promise";
+import AdmZip from "adm-zip";
+import { XMLParser } from "fast-xml-parser";
+import fs from "fs";
+import path from "path";
 
 // 1. Determinar el entorno de trabajo (development, preprod, prod)
 export const APP_ENV = (process.env.APP_ENV || 'development').toLowerCase();
@@ -67,6 +71,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: { table_name: { type: "string", description: "Nombre de la tabla a consultar" } },
           required: ["table_name"]
         }
+      },
+      {
+        name: "read_workbench_model",
+        description: "Lee un modelo .mwb (MySQL Workbench) por su nombre desde el directorio configurado en MODELS_DIR, extrayendo su XML a JSON.",
+        inputSchema: {
+          type: "object",
+          properties: { model_name: { type: "string", description: "Nombre del modelo (con o sin la extensión .mwb)" } },
+          required: ["model_name"]
+        }
       }
     ]
   };
@@ -105,6 +118,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       `;
       const [rows] = await pool.query(query, [dbName, table_name]);
       return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
+    }
+
+    if (name === "read_workbench_model") {
+      let { model_name } = args;
+      const modelsDir = process.env.MODELS_DIR;
+      if (!modelsDir) {
+        throw new Error("La variable de entorno MODELS_DIR no está configurada.");
+      }
+
+      if (!model_name.endsWith(".mwb")) {
+        model_name += ".mwb";
+      }
+
+      const filePath = path.join(modelsDir, model_name);
+
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`No se pudo encontrar el modelo en la ruta: ${filePath}`);
+      }
+
+      // Descomprimir el archivo .mwb y buscar el documento XML
+      const zip = new AdmZip(filePath);
+      const zipEntries = zip.getEntries();
+      const xmlEntry = zipEntries.find(entry => entry.entryName.includes('.xml'));
+      
+      if (!xmlEntry) {
+        throw new Error("No se encontró ningún archivo XML dentro del modelo de Workbench.");
+      }
+
+      const xmlData = zip.readAsText(xmlEntry);
+      
+      // Parsear el XML a JSON
+      const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "_" });
+      const jsonObj = parser.parse(xmlData);
+      
+      return { content: [{ type: "text", text: JSON.stringify(jsonObj, null, 2) }] };
     }
     
     if (name === "execute_read_query") {

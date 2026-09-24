@@ -9,6 +9,7 @@ Las mejoras se han ordenado de manera progresiva, desde ajustes de lectura bási
 - [x] **Selección de entorno de trabajo:** Permitir tener varios entornos configurados en el `.env` e indicar explícitamente con cuál de ellos se va a trabajar.
 - [x] **Soporte para Relaciones y Llaves Foráneas (Foreign Keys):** Una herramienta para consultar cómo se relacionan las tablas entre sí, para que el LLM sepa automáticamente qué tablas cruzar en un `JOIN`.
 - [ ] **Análisis de índices:** Herramienta para revisar qué índices tiene una tabla antes de realizar consultas pesadas.
+- [x] **Lectura de modelos de MySQL Workbench (.mwb):** [PRIORIDAD] Crear una herramienta (`read_workbench_model`) que reciba la ruta de un archivo `.mwb` local, lo descomprima y parsee su XML interno para permitir a la IA analizar los cambios modelados antes de que se sincronicen con la base de datos de `development`.
 
 ## Fase 2: Fundamentos de Seguridad y Control
 *Preparar el terreno asegurando que cuando se habiliten las escrituras, no haya riesgos de destruir datos por error.*
