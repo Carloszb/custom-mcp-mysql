@@ -5,13 +5,22 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import mysql from "mysql2/promise";
 
-// 1. Configurar conexión a BD usando las variables de entorno inyectadas
+// 1. Determinar el entorno de trabajo (development, preprod, prod)
+export const APP_ENV = (process.env.APP_ENV || 'development').toLowerCase();
+let envPrefix = 'DEV_';
+if (APP_ENV === 'prod' || APP_ENV === 'production') envPrefix = 'PROD_';
+if (APP_ENV === 'preprod') envPrefix = 'PREPROD_';
+
+// Función helper para leer variable del entorno específico, o caer en la genérica
+const getEnv = (key) => process.env[`${envPrefix}${key}`] || process.env[key];
+
+// 2. Configurar conexión a BD usando las variables de entorno según el entorno actual
 const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST,
-  port: process.env.MYSQL_PORT ? parseInt(process.env.MYSQL_PORT) : 3306,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASS,
-  database: process.env.MYSQL_DB,
+  host: getEnv('MYSQL_HOST'),
+  port: getEnv('MYSQL_PORT') ? parseInt(getEnv('MYSQL_PORT')) : 3306,
+  user: getEnv('MYSQL_USER'),
+  password: getEnv('MYSQL_PASS'),
+  database: getEnv('MYSQL_DB'),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -49,6 +58,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: { sql: { type: "string", description: "La consulta SELECT a ejecutar" } },
           required: ["sql"]
         }
+      },
+      {
+        name: "get_foreign_keys",
+        description: "Obtiene las relaciones (llaves foráneas) de una tabla para saber cómo se conecta con otras.",
+        inputSchema: {
+          type: "object",
+          properties: { table_name: { type: "string", description: "Nombre de la tabla a consultar" } },
+          required: ["table_name"]
+        }
       }
     ]
   };
@@ -69,17 +87,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const [rows] = await pool.query(`DESCRIBE ??`, [table_name]);
       return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
     }
+
+    if (name === "get_foreign_keys") {
+      const { table_name } = args;
+      const dbName = getEnv('MYSQL_DB');
+      const query = `
+        SELECT 
+          COLUMN_NAME, 
+          REFERENCED_TABLE_NAME, 
+          REFERENCED_COLUMN_NAME 
+        FROM 
+          INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE 
+          TABLE_SCHEMA = ? 
+          AND TABLE_NAME = ? 
+          AND REFERENCED_TABLE_NAME IS NOT NULL;
+      `;
+      const [rows] = await pool.query(query, [dbName, table_name]);
+      return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
+    }
     
     if (name === "execute_read_query") {
       const { sql } = args;
+      let finalSql = sql.trim();
       
       // Validación de seguridad para permitir solo consultas SELECT, SHOW o DESCRIBE
-      const queryUpper = sql.trim().toUpperCase();
+      const queryUpper = finalSql.toUpperCase();
       if (!queryUpper.startsWith("SELECT") && !queryUpper.startsWith("SHOW") && !queryUpper.startsWith("DESCRIBE")) {
         throw new Error("Operación denegada. Solo se permiten consultas de tipo SELECT.");
       }
       
-      const [rows] = await pool.query(sql);
+      // Paginación automática: si es un SELECT y no tiene LIMIT explícito, limitar a 100
+      if (queryUpper.startsWith("SELECT") && !/\bLIMIT\b/i.test(finalSql)) {
+        // Quitamos el punto y coma final si lo hay para poder añadir el LIMIT
+        finalSql = finalSql.replace(/;+$/, '') + " LIMIT 100";
+      }
+      
+      const [rows] = await pool.query(finalSql);
       return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
     }
     
@@ -96,7 +140,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Custom MySQL MCP Server corriendo en Stdio...");
+  console.error(`Custom MySQL MCP Server corriendo en Stdio... (Entorno: ${APP_ENV})`);
 }
 
 run().catch(console.error);
